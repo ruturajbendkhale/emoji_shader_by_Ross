@@ -14,9 +14,47 @@ emoji_palette = {tuple(map(int, k[1:-1].split(','))): v for k, v in emoji_palett
 
 print(f"Loaded emoji palette with {len(emoji_palette)} colors.")
 
+# Function to convert RGB to Lab color space
+def rgb_to_lab(rgb):
+    r, g, b = rgb
+    r, g, b = r/255.0, g/255.0, b/255.0
+    
+    if r > 0.04045:
+        r = ((r + 0.055) / 1.055) ** 2.4
+    else:
+        r = r / 12.92
+    if g > 0.04045:
+        g = ((g + 0.055) / 1.055) ** 2.4
+    else:
+        g = g / 12.92
+    if b > 0.04045:
+        b = ((b + 0.055) / 1.055) ** 2.4
+    else:
+        b = b / 12.92
+
+    x = (r * 0.4124 + g * 0.3576 + b * 0.1805) / 0.95047
+    y = (r * 0.2126 + g * 0.7152 + b * 0.0722) / 1.00000
+    z = (r * 0.0193 + g * 0.1192 + b * 0.9505) / 1.08883
+
+    x = x ** (1/3) if x > 0.008856 else (7.787 * x) + 16/116
+    y = y ** (1/3) if y > 0.008856 else (7.787 * y) + 16/116
+    z = z ** (1/3) if z > 0.008856 else (7.787 * z) + 16/116
+
+    L = (116 * y) - 16
+    a = 500 * (x - y)
+    b = 200 * (y - z)
+
+    return L, a, b
+
+# Function to calculate color difference
+def color_difference(rgb1, rgb2):
+    lab1 = rgb_to_lab(rgb1)
+    lab2 = rgb_to_lab(rgb2)
+    return sum((c1 - c2) ** 2 for c1, c2 in zip(lab1, lab2)) ** 0.5
+
 # Function to find the closest color in our palette
 def get_closest_color(rgb):
-    return min(emoji_palette.keys(), key=lambda c: sum((a - b) ** 2 for a, b in zip(c, rgb)))
+    return min(emoji_palette.keys(), key=lambda c: color_difference(rgb, c))
 
 # Function to get the emoji for a given color
 def get_emoji_for_color(rgb):
@@ -35,13 +73,20 @@ def create_emoji_grid(frame):
     # Resize to 90x90
     resized = cv2.resize(cropped, (90, 90), interpolation=cv2.INTER_AREA)
     
-    # Enhance contrast
+    # Enhance contrast and color
     lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
     cl = clahe.apply(l)
     limg = cv2.merge((cl,a,b))
     enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    
+    # Increase saturation
+    hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    s = cv2.add(s, 30)  # Increase saturation by 30
+    hsv_enhanced = cv2.merge((h, s, v))
+    enhanced = cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2BGR)
     
     emoji_grid = []
     for y in range(90):
