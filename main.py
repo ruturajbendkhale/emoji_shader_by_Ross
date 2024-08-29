@@ -3,6 +3,7 @@ import cv2
 import json
 import numpy as np
 from PIL import Image
+import time
 
 # Load the emoji palette
 with open('emoji_palette.json', 'r') as f:
@@ -34,11 +35,19 @@ def create_emoji_grid(frame):
     # Resize to 90x90
     resized = cv2.resize(cropped, (90, 90), interpolation=cv2.INTER_AREA)
     
+    # Enhance contrast
+    lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    
     emoji_grid = []
     for y in range(90):
         row = []
         for x in range(90):
-            pixel = resized[y, x]
+            pixel = enhanced[y, x]
             emoji = get_emoji_for_color((int(pixel[2]), int(pixel[1]), int(pixel[0])))  # BGR to RGB
             row.append(emoji)
         emoji_grid.append(row)
@@ -74,6 +83,9 @@ if not cap.isOpened():
     print("Error: Could not open webcam.")
     exit()
 
+frame_times = []
+start_time = time.time()
+
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -82,6 +94,15 @@ while True:
 
     cropped, resized, emoji_grid = create_emoji_grid(frame)
     emoji_frame = draw_emoji_grid(emoji_grid)
+
+    # Calculate and display FPS
+    current_time = time.time()
+    frame_times.append(current_time)
+    frame_times = [t for t in frame_times if t > current_time - 1]  # Keep only the last second
+    fps = len(frame_times)
+    
+    cv2.putText(cropped, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(emoji_frame, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
 
     # Display the three windows
     #cv2.imshow('Original (Cropped)', cropped)
@@ -93,3 +114,5 @@ while True:
 
 cap.release()
 cv2.destroyAllWindows()
+
+print(f"Average FPS: {len(frame_times) / (time.time() - start_time):.2f}")
