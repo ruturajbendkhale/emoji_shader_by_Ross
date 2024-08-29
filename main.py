@@ -4,6 +4,10 @@ import json
 import numpy as np
 from PIL import Image
 import time
+import multiprocessing as mp
+
+# Create emoji_export folder if it doesn't exist
+os.makedirs('emoji_export', exist_ok=True)
 
 # Load the emoji palette
 with open('emoji_palette.json', 'r') as f:
@@ -61,9 +65,21 @@ def get_emoji_for_color(rgb):
     closest_color = get_closest_color(rgb)
     return emoji_palette[closest_color]
 
-# Create emoji grid from webcam input
-def create_emoji_grid(frame):
-    # Crop to 720x720
+# Function to process a section of the frame
+def process_frame_section(section):
+    emoji_grid = []
+    for y in range(section.shape[0]):
+        row = []
+        for x in range(section.shape[1]):
+            pixel = section[y, x]
+            emoji = get_emoji_for_color((int(pixel[2]), int(pixel[1]), int(pixel[0])))  # BGR to RGB
+            row.append(emoji)
+        emoji_grid.append(row)
+    return emoji_grid
+
+# Create emoji grid from webcam input using parallel processing
+def create_emoji_grid_parallel(frame, num_processes):
+    # Crop to square
     height, width = frame.shape[:2]
     crop_size = min(height, width)
     start_x = (width - crop_size) // 2
@@ -73,29 +89,36 @@ def create_emoji_grid(frame):
     # Resize to 90x90
     resized = cv2.resize(cropped, (90, 90), interpolation=cv2.INTER_AREA)
     
-    # Enhance contrast and color
+    # Enhance contrast and color (adjusted parameters)
     lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
     cl = clahe.apply(l)
     limg = cv2.merge((cl,a,b))
     enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
     
-    # Increase saturation
+    # Increase saturation (reduced amount)
     hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
     h, s, v = cv2.split(hsv)
-    s = cv2.add(s, 30)  # Increase saturation by 30
+    s = cv2.add(s, 20)
     hsv_enhanced = cv2.merge((h, s, v))
     enhanced = cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2BGR)
     
-    emoji_grid = []
-    for y in range(90):
-        row = []
-        for x in range(90):
-            pixel = enhanced[y, x]
-            emoji = get_emoji_for_color((int(pixel[2]), int(pixel[1]), int(pixel[0])))  # BGR to RGB
-            row.append(emoji)
-        emoji_grid.append(row)
+    # Apply a slight gamma correction to reduce brightness
+    gamma = 1.1
+    inv_gamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
+    enhanced = cv2.LUT(enhanced, table)
+    
+    # Split the frame into sections for parallel processing
+    sections = np.array_split(enhanced, num_processes)
+    
+    # Process sections in parallel
+    with mp.Pool(processes=num_processes) as pool:
+        results = pool.map(process_frame_section, sections)
+    
+    # Combine results
+    emoji_grid = [row for section in results for row in section]
     
     return cropped, resized, emoji_grid
 
@@ -121,43 +144,53 @@ def draw_emoji_grid(emoji_grid):
 
     return np.array(image)
 
-# Main webcam loop
-cap = cv2.VideoCapture(0)
-
-if not cap.isOpened():
-    print("Error: Could not open webcam.")
-    exit()
-
-frame_times = []
-start_time = time.time()
-
-while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Could not read frame.")
-        break
-
-    cropped, resized, emoji_grid = create_emoji_grid(frame)
-    emoji_frame = draw_emoji_grid(emoji_grid)
-
-    # Calculate and display FPS
-    current_time = time.time()
-    frame_times.append(current_time)
-    frame_times = [t for t in frame_times if t > current_time - 1]  # Keep only the last second
-    fps = len(frame_times)
+if __name__ == '__main__':
+    # Determine the number of processes to use
+    num_processes = max(1, mp.cpu_count() - 1)  # Use all cores except one
     
-    cv2.putText(cropped, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.putText(emoji_frame, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    # Main webcam loop
+    cap = cv2.VideoCapture(0)
 
-    # Display the three windows
-    #cv2.imshow('Original (Cropped)', cropped)
-    #cv2.imshow('Compressed (90x90)', cv2.resize(resized, (720, 720), interpolation=cv2.INTER_NEAREST))
-    cv2.imshow('Emoji Grid', cv2.cvtColor(emoji_frame, cv2.COLOR_RGB2BGR))
+    if not cap.isOpened():
+        print("Error: Could not open webcam.")
+        exit()
 
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
+    frame_times = []
+    start_time = time.time()
+    frame_count = 0
 
-cap.release()
-cv2.destroyAllWindows()
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            print("Error: Could not read frame.")
+            break
 
-print(f"Average FPS: {len(frame_times) / (time.time() - start_time):.2f}")
+        # Use parallel processing to create emoji grid
+        cropped, resized, emoji_grid = create_emoji_grid_parallel(frame, num_processes)
+        emoji_frame = draw_emoji_grid(emoji_grid)
+
+        # Calculate and display FPS
+        current_time = time.time()
+        frame_times.append(current_time)
+        frame_times = [t for t in frame_times if t > current_time - 1]  # Keep only the last second
+        fps = len(frame_times)
+        
+        cv2.putText(cropped, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+        cv2.putText(emoji_frame, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
+        # Save the emoji frame
+        #frame_filename = os.path.join('emoji_export', f'frame_{frame_count:04d}.png')
+        #cv2.imwrite(frame_filename, cv2.cvtColor(emoji_frame, cv2.COLOR_RGB2BGR))
+        #frame_count += 1
+
+        # Display the emoji grid window
+        cv2.imshow('Emoji Grid', cv2.cvtColor(emoji_frame, cv2.COLOR_RGB2BGR))
+
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+
+    print(f"Average FPS: {len(frame_times) / (time.time() - start_time):.2f}")
+    print(f"Saved {frame_count} frames in the 'emoji_export' folder.")
