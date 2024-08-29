@@ -3,36 +3,49 @@ import json
 import numpy as np
 from PIL import Image
 
-# Define primary colors (RGB)
-primary_colors = [
-    (255, 0, 0),    # Red
-    (0, 255, 0),    # Green
-    (0, 0, 255),    # Blue
-    (255, 255, 0),  # Yellow
-    (255, 0, 255),  # Magenta
-    (0, 255, 255),  # Cyan
-    (255, 255, 255),# White
-    (128, 128, 128),# Gray
-    (0, 0, 0)       # Black
+# Define a more natural color palette
+natural_colors = [
+    (255, 255, 255),  # White
+    (0, 0, 0),        # Black
+    (128, 128, 128),  # Gray
+    (255, 0, 0),      # Red
+    (0, 128, 0),      # Green
+    (0, 0, 255),      # Blue
+    (255, 255, 0),    # Yellow
+    (255, 165, 0),    # Orange
+    (128, 0, 128),    # Purple
+    (165, 42, 42),    # Brown
+    (210, 180, 140),  # Tan
+    (244, 164, 96),   # Sandy brown
+    (218, 165, 32),   # Goldenrod
+    (0, 128, 128),    # Teal
+    (0, 255, 255),    # Cyan
+    (255, 192, 203),  # Pink
+    (255, 127, 80),   # Coral
+    (50, 205, 50),    # Lime green
 ]
 
-# Function to generate secondary colors
-def generate_secondary_colors(color1, color2, num_colors=3):
-    colors = []
-    for i in range(1, num_colors + 1):
-        r = int(color1[0] * (num_colors + 1 - i) / (num_colors + 1) + color2[0] * i / (num_colors + 1))
-        g = int(color1[1] * (num_colors + 1 - i) / (num_colors + 1) + color2[1] * i / (num_colors + 1))
-        b = int(color1[2] * (num_colors + 1 - i) / (num_colors + 1) + color2[2] * i / (num_colors + 1))
-        colors.append((r, g, b))
-    return colors
+# Fitzpatrick skin tone colors
+skin_tones = [
+    (255, 224, 196),  # Type I
+    (241, 194, 125),  # Type II
+    (224, 172, 105),  # Type III
+    (198, 134, 66),   # Type IV
+    (141, 85, 36),    # Type V
+    (70, 39, 23)      # Type VI
+]
 
-# Function to generate shades
-def generate_shades(color, num_shades=2):
-    shades = []
-    for i in range(1, num_shades + 1):
-        shade = tuple(int(c * (num_shades + 1 - i) / (num_shades + 1)) for c in color)
-        shades.append(shade)
-    return shades
+# Function to generate shades and tints
+def generate_variations(color, num_variations=2):
+    variations = []
+    for i in range(1, num_variations + 1):
+        # Shade (darker)
+        shade = tuple(int(c * (num_variations + 1 - i) / (num_variations + 1)) for c in color)
+        variations.append(shade)
+        # Tint (lighter)
+        tint = tuple(int(c + (255 - c) * i / (num_variations + 1)) for c in color)
+        variations.append(tint)
+    return variations
 
 # Function to calculate color difference
 def color_difference(c1, c2):
@@ -47,22 +60,17 @@ def get_average_color(image_path):
         return tuple(np.mean(rgb_array, axis=(0,1)).astype(int))
 
 # Generate color palette
-color_palette = primary_colors.copy()
+color_palette = natural_colors + skin_tones
 
-# Add secondary colors
-for i in range(len(primary_colors)):
-    for j in range(i+1, len(primary_colors)):
-        color_palette.extend(generate_secondary_colors(primary_colors[i], primary_colors[j]))
-
-# Add shades to reach 60 colors
+# Add variations to reach 60 colors
 while len(color_palette) < 60:
-    for color in primary_colors:
+    for color in natural_colors + skin_tones:
         if len(color_palette) >= 60:
             break
-        color_palette.extend(generate_shades(color))
+        color_palette.extend(generate_variations(color))
 
 # Ensure we have exactly 60 colors
-color_palette = color_palette[:60]
+color_palette = list(set(color_palette))[:60]  # Remove duplicates and limit to 60
 
 # Directory containing emoji PNGs
 emoji_dir = 'svg_downloded/png_resized'
