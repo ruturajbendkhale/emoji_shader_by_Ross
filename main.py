@@ -54,13 +54,22 @@ def create_emoji_grid(frame):
     start_y = (height - crop_size) // 2
     cropped = frame[start_y:start_y+crop_size, start_x:start_x+crop_size]
     
-    resized = cv2.resize(cropped, (90, 90), interpolation=cv2.INTER_AREA)
+    resized = cv2.resize(cropped, (180, 180), interpolation=cv2.INTER_AREA)
     
     # Convert BGR to RGB
     rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     
-    vectorized_get_emoji = np.vectorize(get_emoji_for_color)
-    emoji_grid = vectorized_get_emoji(rgb_frame[:,:,0], rgb_frame[:,:,1], rgb_frame[:,:,2])
+    emoji_grid = []
+    for y in range(0, 180, 2):
+        row = []
+        for x in range(0, 180, 2):
+            # Sample 2x2 pixel area
+            area = rgb_frame[y:y+2, x:x+2]
+            # Calculate average color of the 2x2 area
+            r, g, b = np.mean(area, axis=(0, 1)).astype(int)
+            emoji = get_emoji_for_color(r, g, b)
+            row.append(emoji)
+        emoji_grid.append(row)
     
     return cropped, resized, emoji_grid
 
@@ -78,7 +87,6 @@ def draw_emoji_grid(emoji_grid):
                 pos_y = y * cell_size
                 image[pos_y:pos_y+cell_size, pos_x:pos_x+cell_size] = emoji_img
 
-    # Convert RGBA to BGR without any color adjustments
     return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
 
 def main():
