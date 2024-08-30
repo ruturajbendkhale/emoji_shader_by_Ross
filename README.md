@@ -21,7 +21,7 @@ Emoji Shader is a real-time video processing application that transforms webcam 
 
 1. Clone this repository:
    ```
-   git clone https://github.com/yourusername/emoji-shader.git
+   git clone https://github.com/ruturajbendkhale/emoji_shader_by_Ross
    cd emoji-shader
    ```
 
