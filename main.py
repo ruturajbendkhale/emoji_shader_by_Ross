@@ -41,6 +41,7 @@ def get_emoji_for_color(r, g, b):
     rgb = (r, g, b)
     if rgb in color_to_emoji_cache:
         return color_to_emoji_cache[rgb]
+    
     closest_color = min(emoji_palette.keys(), key=lambda c: color_difference(rgb, c))
     emoji = emoji_palette[closest_color]
     color_to_emoji_cache[rgb] = emoji
@@ -55,28 +56,8 @@ def create_emoji_grid(frame):
     
     resized = cv2.resize(cropped, (90, 90), interpolation=cv2.INTER_AREA)
     
-    # Enhance contrast and color
-    lab = cv2.cvtColor(resized, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(4,4))
-    cl = clahe.apply(l)
-    limg = cv2.merge((cl,a,b))
-    enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
-    
-    # Increase saturation
-    hsv = cv2.cvtColor(enhanced, cv2.COLOR_BGR2HSV)
-    h, s, v = cv2.split(hsv)
-    s = cv2.add(s, 20)
-    hsv_enhanced = cv2.merge((h, s, v))
-    enhanced = cv2.cvtColor(hsv_enhanced, cv2.COLOR_HSV2BGR)
-    
-    # Apply gamma correction
-    gamma = 1.1
-    inv_gamma = 1.0 / gamma
-    table = np.array([((i / 255.0) ** inv_gamma) * 255 for i in np.arange(0, 256)]).astype("uint8")
-    enhanced = cv2.LUT(enhanced, table)
-    
-    rgb_frame = cv2.cvtColor(enhanced, cv2.COLOR_BGR2RGB)
+    # Convert BGR to RGB
+    rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     
     vectorized_get_emoji = np.vectorize(get_emoji_for_color)
     emoji_grid = vectorized_get_emoji(rgb_frame[:,:,0], rgb_frame[:,:,1], rgb_frame[:,:,2])
@@ -84,18 +65,20 @@ def create_emoji_grid(frame):
     return cropped, resized, emoji_grid
 
 def draw_emoji_grid(emoji_grid):
-    grid_size = emoji_grid.shape[0]
-    cell_size = 8
+    grid_size = len(emoji_grid)
+    cell_size = 8  # Size of each emoji
     image_size = grid_size * cell_size
     image = np.zeros((image_size, image_size, 4), dtype=np.uint8)
 
     for y, row in enumerate(emoji_grid):
         for x, emoji_name in enumerate(row):
             if emoji_name in emoji_cache:
+                emoji_img = emoji_cache[emoji_name]
                 pos_x = x * cell_size
                 pos_y = y * cell_size
-                image[pos_y:pos_y+cell_size, pos_x:pos_x+cell_size] = emoji_cache[emoji_name]
+                image[pos_y:pos_y+cell_size, pos_x:pos_x+cell_size] = emoji_img
 
+    # Convert RGBA to BGR without any color adjustments
     return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
 
 def main():
@@ -112,7 +95,7 @@ def main():
     start_time = time.time()
     frame_count = 0
 
-    while True:  # Run indefinitely
+    while True:
         ret, frame = cap.read()
         if not ret:
             print("Error: Could not read frame.")
