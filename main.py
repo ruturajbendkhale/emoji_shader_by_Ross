@@ -42,48 +42,38 @@ def get_emoji_for_color(r, g, b):
     if rgb in color_to_emoji_cache:
         return color_to_emoji_cache[rgb]
     
-    closest_color = min(emoji_palette.keys(), key=lambda c: color_difference(rgb, c))
+    # Adjust color matching to prefer warmer colors
+    adjusted_rgb = (r * 1.0, g * 1.0, b * 0.9)
+    
+    closest_color = min(emoji_palette.keys(), key=lambda c: color_difference(adjusted_rgb, c))
     emoji = emoji_palette[closest_color]
     color_to_emoji_cache[rgb] = emoji
     return emoji
 
 def create_emoji_grid(frame):
-    # Get the dimensions of the input frame
     height, width = frame.shape[:2]
-    
-    # Determine the size of the square crop (use the smaller dimension)
     crop_size = min(height, width)
-    
-    # Calculate the starting points for cropping to ensure we get the center of the frame
     start_x = (width - crop_size) // 2
     start_y = (height - crop_size) // 2
-    
-    # Crop the frame to a square
     cropped = frame[start_y:start_y+crop_size, start_x:start_x+crop_size]
     
-    # Resize the cropped image to 360x360 pixels
-    # This will be the base for our 180x180 emoji grid (sampling 2x2 pixel areas)
     resized = cv2.resize(cropped, (360, 360), interpolation=cv2.INTER_AREA)
-    
-    # Convert the color space from BGR (OpenCV default) to RGB
     rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     
     emoji_grid = []
-    # Iterate over the 360x360 image in 2x2 pixel steps
+    color_grid = np.zeros((180, 180, 3), dtype=np.uint8)
+    
     for y in range(0, 360, 2):
         row = []
         for x in range(0, 360, 2):
-            # Sample a 2x2 pixel area
             area = rgb_frame[y:y+2, x:x+2]
-            # Calculate the average color of the 2x2 area
             r, g, b = np.mean(area, axis=(0, 1)).astype(int)
-            # Get the appropriate emoji for this average color
             emoji = get_emoji_for_color(r, g, b)
             row.append(emoji)
+            color_grid[y//2, x//2] = [r, g, b]
         emoji_grid.append(row)
     
-    # Return the original cropped image, the resized image, and the emoji grid
-    return cropped, resized, emoji_grid
+    return cropped, resized, emoji_grid, color_grid
 
 def draw_emoji_grid(emoji_grid):
     # Get the size of the emoji grid (should be 180x180)
@@ -111,6 +101,22 @@ def draw_emoji_grid(emoji_grid):
     # Convert the image from RGBA to BGR (OpenCV default color space)
     return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
 
+def check_emoji_colors():
+    for emoji_name in list(emoji_cache.keys())[:5]:  # Check first 5 emojis
+        emoji_img = emoji_cache[emoji_name]
+        unique_colors = np.unique(emoji_img.reshape(-1, emoji_img.shape[2]), axis=0)
+        print(f"Emoji {emoji_name} unique colors:")
+        print(unique_colors)
+
+def adjust_color_balance(frame):
+    lab = cv2.cvtColor(frame, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8,8))
+    cl = clahe.apply(l)
+    limg = cv2.merge((cl,a,b))
+    final = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+    return final
+
 def main():
     load_emoji_palette()
     load_emoji_images()
@@ -125,14 +131,20 @@ def main():
     start_time = time.time()
     frame_count = 0
 
+    check_emoji_colors()
+
     while True:
         ret, frame = cap.read()
         if not ret:
             print("Error: Could not read frame.")
             break
 
-        cropped, resized, emoji_grid = create_emoji_grid(frame)
+        frame = adjust_color_balance(frame)
+        cropped, resized, emoji_grid, color_grid = create_emoji_grid(frame)
         emoji_frame = draw_emoji_grid(emoji_grid)
+
+        # Display color grid for debugging
+        cv2.imshow('Emoji Grid', cv2.cvtColor(emoji_frame, cv2.COLOR_RGB2BGR))
 
         current_time = time.time()
         frame_times.append(current_time)
@@ -140,8 +152,6 @@ def main():
         fps = len(frame_times)
         
         cv2.putText(emoji_frame, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-
-        cv2.imshow('Emoji Grid', emoji_frame)
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
