@@ -48,45 +48,67 @@ def get_emoji_for_color(r, g, b):
     return emoji
 
 def create_emoji_grid(frame):
+    # Get the dimensions of the input frame
     height, width = frame.shape[:2]
+    
+    # Determine the size of the square crop (use the smaller dimension)
     crop_size = min(height, width)
+    
+    # Calculate the starting points for cropping to ensure we get the center of the frame
     start_x = (width - crop_size) // 2
     start_y = (height - crop_size) // 2
+    
+    # Crop the frame to a square
     cropped = frame[start_y:start_y+crop_size, start_x:start_x+crop_size]
     
+    # Resize the cropped image to 360x360 pixels
+    # This will be the base for our 180x180 emoji grid (sampling 2x2 pixel areas)
     resized = cv2.resize(cropped, (360, 360), interpolation=cv2.INTER_AREA)
     
-    # Convert BGR to RGB
+    # Convert the color space from BGR (OpenCV default) to RGB
     rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     
     emoji_grid = []
+    # Iterate over the 360x360 image in 2x2 pixel steps
     for y in range(0, 360, 2):
         row = []
         for x in range(0, 360, 2):
-            # Sample 2x2 pixel area
+            # Sample a 2x2 pixel area
             area = rgb_frame[y:y+2, x:x+2]
-            # Calculate average color of the 2x2 area
+            # Calculate the average color of the 2x2 area
             r, g, b = np.mean(area, axis=(0, 1)).astype(int)
+            # Get the appropriate emoji for this average color
             emoji = get_emoji_for_color(r, g, b)
             row.append(emoji)
         emoji_grid.append(row)
     
+    # Return the original cropped image, the resized image, and the emoji grid
     return cropped, resized, emoji_grid
 
 def draw_emoji_grid(emoji_grid):
+    # Get the size of the emoji grid (should be 180x180)
     grid_size = len(emoji_grid)
-    cell_size = 8  # Size of each emoji
+    # Set the size of each emoji in pixels
+    cell_size = 8
+    # Calculate the size of the final image (180 * 8 = 1440 pixels)
     image_size = grid_size * cell_size
+    
+    # Create a blank image with an alpha channel (for transparency)
     image = np.zeros((image_size, image_size, 4), dtype=np.uint8)
 
+    # Iterate over the emoji grid and place each emoji in the image
     for y, row in enumerate(emoji_grid):
         for x, emoji_name in enumerate(row):
             if emoji_name in emoji_cache:
+                # Get the pre-loaded emoji image from the cache
                 emoji_img = emoji_cache[emoji_name]
+                # Calculate the position to place the emoji
                 pos_x = x * cell_size
                 pos_y = y * cell_size
+                # Place the emoji in the image
                 image[pos_y:pos_y+cell_size, pos_x:pos_x+cell_size] = emoji_img
 
+    # Convert the image from RGBA to BGR (OpenCV default color space)
     return cv2.cvtColor(image, cv2.COLOR_RGBA2BGR)
 
 def main():
