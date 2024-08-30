@@ -37,3 +37,5 @@ Emoji Shader is a real-time video processing application that transforms webcam 
 ## Usage
 
 Run the main script:
+Results : 
+![image](https://github.com/user-attachments/assets/61fdb208-bfdd-4519-b426-621a8e611d55)
