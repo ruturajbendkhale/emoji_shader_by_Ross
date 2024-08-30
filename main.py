@@ -54,15 +54,15 @@ def create_emoji_grid(frame):
     start_y = (height - crop_size) // 2
     cropped = frame[start_y:start_y+crop_size, start_x:start_x+crop_size]
     
-    resized = cv2.resize(cropped, (180, 180), interpolation=cv2.INTER_AREA)
+    resized = cv2.resize(cropped, (360, 360), interpolation=cv2.INTER_AREA)
     
     # Convert BGR to RGB
     rgb_frame = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
     
     emoji_grid = []
-    for y in range(0, 180, 2):
+    for y in range(0, 360, 2):
         row = []
-        for x in range(0, 180, 2):
+        for x in range(0, 360, 2):
             # Sample 2x2 pixel area
             area = rgb_frame[y:y+2, x:x+2]
             # Calculate average color of the 2x2 area
