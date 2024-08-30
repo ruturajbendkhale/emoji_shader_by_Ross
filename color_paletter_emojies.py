@@ -2,6 +2,7 @@ import os
 import json
 import numpy as np
 from PIL import Image
+import matplotlib.pyplot as plt
 
 # Define a more natural color palette
 natural_colors = [
@@ -67,6 +68,59 @@ while len(color_palette) < 60:
     color_palette = list(set(color_palette))  # Remove duplicates
     color_palette = color_palette[:60]  # Limit to 60 colors
 
+# Check color wheel coverage
+def rgb_to_hsv(rgb):
+    r, g, b = [x / 255.0 for x in rgb]
+    mx = max(r, g, b)
+    mn = min(r, g, b)
+    diff = mx - mn
+    if mx == mn:
+        h = 0
+    elif mx == r:
+        h = (60 * ((g - b) / diff) + 360) % 360
+    elif mx == g:
+        h = (60 * ((b - r) / diff) + 120) % 360
+    else:
+        h = (60 * ((r - g) / diff) + 240) % 360
+    s = 0 if mx == 0 else (diff / mx) * 100
+    v = mx * 100
+    return h, s, v
+
+def check_color_wheel_coverage(colors):
+    hue_bins = [0] * 12
+    for color in colors:
+        h, _, _ = rgb_to_hsv(color)
+        bin_index = int(h / 30)
+        hue_bins[bin_index] += 1
+    
+    print("Color wheel coverage:")
+    for i, count in enumerate(hue_bins):
+        print(f"Hue {i*30}-{(i+1)*30}: {count} colors")
+
+def plot_color_wheel(colors):
+    fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+    
+    for color in colors:
+        h, s, v = rgb_to_hsv(color)
+        # Normalize the color values to 0-1 range
+        normalized_color = tuple(c / 255 for c in color)
+        ax.scatter(np.radians(h), s, c=[normalized_color], s=100, alpha=0.7)
+    
+    ax.set_ylim(0, 100)
+    ax.set_yticks([])
+    ax.set_xticks(np.linspace(0, 2*np.pi, 12, endpoint=False))
+    ax.set_xticklabels(['0°', '30°', '60°', '90°', '120°', '150°', '180°', '210°', '240°', '270°', '300°', '330°'])
+    ax.set_title("Color Wheel Distribution")
+    
+    plt.savefig('color_wheel_distribution.png')
+    plt.close()
+
+# Check color wheel coverage
+check_color_wheel_coverage(color_palette)
+
+# Plot color wheel
+plot_color_wheel(color_palette)
+
 # Directory containing emoji PNGs
 emoji_dir = 'svg_downloded/png_resized'
 
@@ -94,3 +148,4 @@ with open('emoji_palette.json', 'w') as f:
     json.dump(emoji_palette, f, indent=2)
 
 print(f"Emoji palette saved with {len(emoji_palette)} unique colors and emojis.")
+print("Color wheel distribution graph saved as 'color_wheel_distribution.png'.")
