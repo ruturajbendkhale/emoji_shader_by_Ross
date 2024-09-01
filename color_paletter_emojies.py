@@ -3,6 +3,10 @@ import json
 import numpy as np
 from PIL import Image
 import matplotlib.pyplot as plt
+import random
+import colorsys
+
+color_palette_size = 90  # Defines the number of unique emojies in the palette
 
 # Define a more natural color palette
 natural_colors = [
@@ -55,18 +59,26 @@ def get_average_color(image_path):
         return tuple(np.mean(rgb_array, axis=(0,1)).astype(int))
 
 # Generate color palette
-color_palette = list(set(natural_colors + skin_tones))
+color_palette = natural_colors + skin_tones
 
-# Add variations to reach 60 unique colors
-while len(color_palette) < 60:
+# Add variations to reach 120 unique colors
+while len(color_palette) < color_palette_size:
     new_variations = []
     for color in natural_colors + skin_tones:
-        variations = generate_variations(color)
+        variations = generate_variations(color, num_variations=5)  # Increased from 3 to 5
         new_variations.extend(variations)
     
     color_palette.extend(new_variations)
     color_palette = list(set(color_palette))  # Remove duplicates
-    color_palette = color_palette[:60]  # Limit to 60 colors
+    color_palette = color_palette[:color_palette_size]  # Limit to 120 colors
+
+# Ensure we have exactly 120 colors
+if len(color_palette) < color_palette_size:
+    # If we're short, add some random colors
+    while len(color_palette) < color_palette_size:
+        new_color = (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
+        if new_color not in color_palette:
+            color_palette.append(new_color)
 
 # Check color wheel coverage
 def rgb_to_hsv(rgb):
